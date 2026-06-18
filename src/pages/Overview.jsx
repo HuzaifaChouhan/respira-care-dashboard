@@ -24,11 +24,14 @@ const Overview = () => {
           fetchAppointments(),
         ]);
 
+        const deletedIds = JSON.parse(localStorage.getItem('respira_deleted_appts')) || [];
+        const activeApptsCount = appointments.filter(a => !deletedIds.includes(a.id)).length;
+
         setStats({
           doctorsCount: doctors.length,
           specialtiesCount: specialties.length,
           servicesCount: services.length,
-          appointmentsCount: appointments.length,
+          appointmentsCount: activeApptsCount,
         });
         setError(null);
       } catch (err) {
