@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Check, X, Calendar, Clock, MapPin, Phone, User, Loader2, Info, Trash2 } from 'lucide-react';
+import { Plus, Check, X, Calendar, Clock, MapPin, Phone, User, Loader2, Info, Trash2, Eye } from 'lucide-react';
 import Modal from '../components/Modal';
 import ConfirmModal from '../components/ConfirmModal';
 import { fetchSpecialties, createAppointment, fetchAppointments, updateAppointmentStatus } from '../api';
@@ -8,6 +8,7 @@ const Appointments = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [idToDelete, setIdToDelete] = useState(null);
+  const [viewingAppointment, setViewingAppointment] = useState(null);
   const [appointments, setAppointments] = useState([]);
   const [loadingAppts, setLoadingAppts] = useState(true);
   const [specialties, setSpecialties] = useState([]);
@@ -246,6 +247,14 @@ const Appointments = () => {
                       <div className="flex items-center justify-end gap-2">
 
                         <button 
+                          onClick={() => setViewingAppointment(a)} 
+                          className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                          title="View Details"
+                        >
+                          <Eye size={18} />
+                        </button>
+
+                        <button 
                           onClick={() => handleDeleteClick(a.id)} 
                           className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
                           title="Delete Booking"
@@ -399,6 +408,99 @@ const Appointments = () => {
         title="Delete Appointment Record" 
         message="Are you sure you want to permanently delete this appointment from the dashboard?" 
       />
+
+      <Modal 
+        isOpen={viewingAppointment !== null} 
+        onClose={() => setViewingAppointment(null)} 
+        title="Appointment Details"
+      >
+        {viewingAppointment && (
+          <div className="space-y-6 text-left">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div>
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Status</span>
+                <span className={`inline-block mt-1.5 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                  viewingAppointment.status === 'pending' 
+                    ? 'bg-amber-50 text-amber-600' 
+                    : viewingAppointment.status === 'confirmed' 
+                      ? 'bg-emerald-50 text-emerald-600' 
+                      : 'bg-rose-50 text-rose-600'
+                }`}>
+                  {viewingAppointment.status}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block">Appointment ID</span>
+                <span className="text-sm font-bold text-slate-700 block mt-1.5">#{viewingAppointment.id}</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100/50">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                    <User size={14} className="text-slate-400" /> Patient Info
+                  </span>
+                  <div className="text-base font-bold text-slate-800">{viewingAppointment.full_name}</div>
+                  <div className="text-sm text-slate-500 mt-1 flex items-center gap-1.5">
+                    <Phone size={14} className="text-slate-400" /> {viewingAppointment.phone}
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100/50">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                    <MapPin size={14} className="text-slate-400" /> Address Details
+                  </span>
+                  <div className="text-sm text-slate-700 leading-relaxed font-medium">
+                    {viewingAppointment.address}
+                  </div>
+                  {viewingAppointment.pincode && (
+                    <div className="text-xs text-slate-400 mt-1">
+                      Pincode: {viewingAppointment.pincode}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100/50">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                    <Clock size={14} className="text-slate-400" /> Date & Time Slot
+                  </span>
+                  <div className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                    <Calendar size={16} className="text-[var(--color-brand-dark)]" /> {viewingAppointment.date}
+                  </div>
+                  <div className="text-sm font-bold text-slate-800 flex items-center gap-1.5 mt-2">
+                    <Clock size={16} className="text-[var(--color-brand-dark)]" /> {viewingAppointment.time_slot}
+                  </div>
+                </div>
+
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100/50">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 mb-2">
+                    <Info size={14} className="text-slate-400" /> Department / Case
+                  </span>
+                  <div className="text-sm font-bold text-slate-800">
+                    {viewingAppointment.specialty_name || viewingAppointment.specialty}
+                  </div>
+                  <div className="text-xs text-slate-500 mt-1">
+                    Condition: {viewingAppointment.condition_name || viewingAppointment.condition}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-4 flex justify-end">
+              <button 
+                type="button"
+                onClick={() => setViewingAppointment(null)}
+                className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition-all"
+              >
+                Close Details
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };

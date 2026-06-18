@@ -45,25 +45,42 @@ export default async function handler(req, res) {
 
       // Try Catbox for reliable permanent image uploads (bypassing Telegraph timeouts/blocks)
       try {
-        const boundary = `----VercelUploadBoundary${Math.random().toString(36).substring(2)}`;
-        const part1 = `--${boundary}\r\nContent-Disposition: form-data; name="reqtype"\r\n\r\nfileupload\r\n`;
-        const part2 = `--${boundary}\r\nContent-Disposition: form-data; name="fileToUpload"; filename="image.${ext}"\r\nContent-Type: ${mimeType}\r\n\r\n`;
-        const part3 = `\r\n--${boundary}--\r\n`;
+        let response;
+        if (typeof FormData !== 'undefined' && typeof Blob !== 'undefined') {
+          const formData = new FormData();
+          formData.append('reqtype', 'fileupload');
+          formData.append('fileToUpload', new Blob([buffer], { type: mimeType }), `image.${ext}`);
 
-        const catboxBuffer = Buffer.concat([
-          Buffer.from(part1, 'utf-8'),
-          Buffer.from(part2, 'utf-8'),
-          buffer,
-          Buffer.from(part3, 'utf-8')
-        ]);
+          response = await fetch('https://catbox.moe/user/api.php', {
+            method: 'POST',
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+            },
+            body: formData
+          });
+        } else {
+          // Fallback to manual boundary construction if FormData/Blob are not globally available
+          const boundary = `----VercelUploadBoundary${Math.random().toString(36).substring(2)}`;
+          const part1 = `--${boundary}\r\nContent-Disposition: form-data; name="reqtype"\r\n\r\nfileupload\r\n`;
+          const part2 = `--${boundary}\r\nContent-Disposition: form-data; name="fileToUpload"; filename="image.${ext}"\r\nContent-Type: ${mimeType}\r\n\r\n`;
+          const part3 = `\r\n--${boundary}--\r\n`;
 
-        const response = await fetch('https://catbox.moe/user/api.php', {
-          method: 'POST',
-          headers: {
-            'Content-Type': `multipart/form-data; boundary=${boundary}`
-          },
-          body: catboxBuffer
-        });
+          const catboxBuffer = Buffer.concat([
+            Buffer.from(part1, 'utf-8'),
+            Buffer.from(part2, 'utf-8'),
+            buffer,
+            Buffer.from(part3, 'utf-8')
+          ]);
+
+          response = await fetch('https://catbox.moe/user/api.php', {
+            method: 'POST',
+            headers: {
+              'Content-Type': `multipart/form-data; boundary=${boundary}`,
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+            },
+            body: catboxBuffer
+          });
+        }
 
         const url = await response.text();
         if (url && url.startsWith('http')) {

@@ -93,11 +93,12 @@ const Doctors = () => {
           if (res && res.url) {
             setFormData(prev => ({ ...prev, photo: res.url }));
           } else {
-            setError("Failed to upload image from device.");
+            setError("Failed to upload image: No URL returned from upload provider.");
           }
         } catch (err) {
           console.error("Image upload failed:", err);
-          setError("Failed to upload image from device. Please try again.");
+          const detailMsg = err.details?.message || err.details?.error || "Please try again.";
+          setError(`Failed to upload image from device. (${detailMsg})`);
         } finally {
           setUploadingImage(false);
         }
