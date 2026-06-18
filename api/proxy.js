@@ -1,3 +1,5 @@
+import https from 'https';
+
 export default async function handler(req, res) {
   // Set CORS headers so client browsers can access this endpoint cleanly
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -43,31 +45,51 @@ export default async function handler(req, res) {
       const buffer = Buffer.from(base64Content, 'base64');
       const ext = (mimeType.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
 
-      // Try Catbox for reliable permanent image uploads (bypassing Telegraph timeouts/blocks)
+      // Try Catbox for reliable permanent image uploads (using native Node https to avoid Undici fetch chunked encoding bugs)
       try {
-        const boundary = `----VercelUploadBoundary${Math.random().toString(36).substring(2)}`;
-        const part1 = `--${boundary}\r\nContent-Disposition: form-data; name="reqtype"\r\n\r\nfileupload\r\n`;
-        const part2 = `--${boundary}\r\nContent-Disposition: form-data; name="fileToUpload"; filename="image.${ext}"\r\nContent-Type: ${mimeType}\r\n\r\n`;
-        const part3 = `\r\n--${boundary}--\r\n`;
+        const url = await new Promise((resolve, reject) => {
+          const boundary = `----VercelUploadBoundary${Math.random().toString(36).substring(2)}`;
+          const part1 = `--${boundary}\r\nContent-Disposition: form-data; name="reqtype"\r\n\r\nfileupload\r\n`;
+          const part2 = `--${boundary}\r\nContent-Disposition: form-data; name="fileToUpload"; filename="image.${ext}"\r\nContent-Type: ${mimeType}\r\n\r\n`;
+          const part3 = `\r\n--${boundary}--\r\n`;
 
-        const catboxBuffer = Buffer.concat([
-          Buffer.from(part1, 'utf-8'),
-          Buffer.from(part2, 'utf-8'),
-          buffer,
-          Buffer.from(part3, 'utf-8')
-        ]);
+          const catboxBuffer = Buffer.concat([
+            Buffer.from(part1, 'utf-8'),
+            Buffer.from(part2, 'utf-8'),
+            buffer,
+            Buffer.from(part3, 'utf-8')
+          ]);
 
-        const response = await fetch('https://catbox.moe/user/api.php', {
-          method: 'POST',
-          headers: {
-            'Content-Type': `multipart/form-data; boundary=${boundary}`,
-            'Content-Length': catboxBuffer.length.toString(),
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-          },
-          body: catboxBuffer
+          const options = {
+            hostname: 'catbox.moe',
+            port: 443,
+            path: '/user/api.php',
+            method: 'POST',
+            headers: {
+              'Content-Type': `multipart/form-data; boundary=${boundary}`,
+              'Content-Length': catboxBuffer.length,
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+            }
+          };
+
+          const request = https.request(options, (response) => {
+            let data = '';
+            response.on('data', (chunk) => {
+              data += chunk;
+            });
+            response.on('end', () => {
+              resolve(data);
+            });
+          });
+
+          request.on('error', (err) => {
+            reject(err);
+          });
+
+          request.write(catboxBuffer);
+          request.end();
         });
 
-        const url = await response.text();
         if (url && url.startsWith('http')) {
           return res.status(200).json({ url });
         }
