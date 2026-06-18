@@ -4,34 +4,52 @@ import Modal from '../components/Modal';
 import ConfirmModal from '../components/ConfirmModal';
 import { fetchDoctors, fetchSpecialties, createDoctor, updateDoctor, deleteDoctor, uploadImage } from '../api';
 
-const sanitizePhotoUrl = (url) => {
-  if (!url) return '';
-  if (url.includes('files.catbox.moe') && !url.match(/\.(png|jpg|jpeg|gif|webp|svg)/i)) {
-    return `${url}.png`;
-  }
-  return url;
-};
-
-const DoctorImage = ({ src, alt }) => {
+const DoctorImage = ({ src, alt, className }) => {
+  const [currentSrc, setCurrentSrc] = useState('');
   const [error, setError] = useState(false);
-  // Reset error state if src changes
+  const [extIndex, setExtIndex] = useState(0);
+  const extensions = ['.jpg', '.png', '.jpeg', '.webp'];
+
   useEffect(() => {
     setError(false);
+    setExtIndex(0);
+    if (src && src.includes('files.catbox.moe') && !src.match(/\.(png|jpg|jpeg|gif|webp|svg)/i)) {
+      setCurrentSrc(`${src}.jpg`);
+    } else {
+      setCurrentSrc(src || '');
+    }
   }, [src]);
 
-  if (!src || error) {
+  const handleImageError = () => {
+    if (src && src.includes('files.catbox.moe') && !src.match(/\.(png|jpg|jpeg|gif|webp|svg)/i)) {
+      const nextIndex = extIndex + 1;
+      if (nextIndex < extensions.length) {
+        setExtIndex(nextIndex);
+        setCurrentSrc(`${src}${extensions[nextIndex]}`);
+      } else {
+        setError(true);
+      }
+    } else {
+      setError(true);
+    }
+  };
+
+  const defaultClass = "w-12 h-12 rounded-xl object-cover border border-slate-100";
+
+  if (!currentSrc || error) {
     return (
-      <div className="w-12 h-12 rounded-xl bg-cyan-50 flex items-center justify-center text-[var(--color-brand-dark)]">
+      <div className={className || "w-12 h-12 rounded-xl bg-cyan-50 flex items-center justify-center text-[var(--color-brand-dark)]"}>
         <UserRound size={24} />
       </div>
     );
   }
+
   return (
     <img 
-      src={sanitizePhotoUrl(src)} 
+      src={currentSrc} 
       alt={alt} 
-      className="w-12 h-12 rounded-xl object-cover border border-slate-100"
-      onError={() => setError(true)}
+      className={className || defaultClass}
+      onError={handleImageError}
     />
   );
 };
@@ -362,8 +380,8 @@ const Doctors = () => {
             <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-3xl border border-slate-100">
               <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-cyan-50 flex items-center justify-center border border-slate-100 shrink-0">
                 {formData.photo ? (
-                  <img 
-                    src={sanitizePhotoUrl(formData.photo)} 
+                  <DoctorImage 
+                    src={formData.photo} 
                     alt="Preview" 
                     className="w-full h-full object-cover" 
                   />
