@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Check, X, Calendar, Clock, MapPin, Phone, User, Loader2, Info, Edit3, Trash2 } from 'lucide-react';
+import { Plus, Check, X, Calendar, Clock, MapPin, Phone, User, Loader2, Info, Trash2 } from 'lucide-react';
 import Modal from '../components/Modal';
 import ConfirmModal from '../components/ConfirmModal';
 import { fetchSpecialties, createAppointment, fetchAppointments, updateAppointmentStatus } from '../api';
@@ -8,7 +8,6 @@ const Appointments = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [idToDelete, setIdToDelete] = useState(null);
-  const [editingId, setEditingId] = useState(null);
   const [appointments, setAppointments] = useState([]);
   const [loadingAppts, setLoadingAppts] = useState(true);
   const [specialties, setSpecialties] = useState([]);
@@ -18,7 +17,6 @@ const Appointments = () => {
   const [apiError, setApiError] = useState(null);
 
   const [deletedIds, setDeletedIds] = useState(() => JSON.parse(localStorage.getItem('respira_deleted_appts')) || []);
-  const [editedOverrides, setEditedOverrides] = useState(() => JSON.parse(localStorage.getItem('respira_edited_appts')) || {});
 
   const [formData, setFormData] = useState({
     full_name: '',
@@ -35,9 +33,7 @@ const Appointments = () => {
     localStorage.setItem('respira_deleted_appts', JSON.stringify(deletedIds));
   }, [deletedIds]);
 
-  useEffect(() => {
-    localStorage.setItem('respira_edited_appts', JSON.stringify(editedOverrides));
-  }, [editedOverrides]);
+
 
   async function loadAppointmentsData() {
     try {
@@ -71,7 +67,7 @@ const Appointments = () => {
   }, []);
 
   const handleOpenAdd = () => {
-    setEditingId(null);
+
     setFormData({
       full_name: '',
       phone: '',
@@ -87,30 +83,7 @@ const Appointments = () => {
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (appt) => {
-    setEditingId(appt.id);
-    
-    // Attempt to map names back to local IDs
-    const matchedSpec = specialties.find(s => s.name === appt.specialty_name || s.name === appt.specialty);
-    const specId = matchedSpec ? matchedSpec.id.toString() : '';
-    
-    const matchedCond = matchedSpec ? (matchedSpec.conditions || []).find(c => c.name === appt.condition_name || c.name === appt.condition) : null;
-    const condId = matchedCond ? matchedCond.id.toString() : '';
 
-    setFormData({
-      full_name: appt.full_name,
-      phone: appt.phone,
-      address: appt.address,
-      pincode: appt.pincode || '',
-      specialtyId: specId,
-      conditionId: condId,
-      date: appt.date,
-      time_slot: appt.time_slot
-    });
-    setApiSuccess(null);
-    setApiError(null);
-    setIsModalOpen(true);
-  };
 
   const handleDeleteClick = (id) => {
     setIdToDelete(id);
@@ -153,35 +126,7 @@ const Appointments = () => {
     const conditionName = availableConditions.find(c => c.id === parseInt(formData.conditionId))?.name || 'General';
     const specialtyName = selectedSpecialty?.name || 'General';
 
-    if (editingId) {
-      // Edit mode: save overrides in localStorage
-      const updatedFields = {
-        full_name: formData.full_name,
-        phone: formData.phone,
-        address: formData.address,
-        pincode: formData.pincode,
-        specialty_name: specialtyName,
-        specialty: specialtyName,
-        condition_name: conditionName,
-        condition: conditionName,
-        date: formData.date,
-        time_slot: formData.time_slot
-      };
 
-      setEditedOverrides(prev => ({
-        ...prev,
-        [editingId]: updatedFields
-      }));
-
-      setApiSuccess("Appointment details updated successfully!");
-      setTimeout(() => {
-        setIsModalOpen(false);
-        setEditingId(null);
-        setApiSuccess(null);
-      }, 1500);
-      setSubmitting(false);
-      return;
-    }
 
     // Add mode: create on API
     const payload = {
@@ -220,14 +165,7 @@ const Appointments = () => {
     }
   };
 
-  const displayedAppointments = appointments
-    .filter(a => !deletedIds.includes(a.id))
-    .map(a => {
-      if (editedOverrides[a.id]) {
-        return { ...a, ...editedOverrides[a.id] };
-      }
-      return a;
-    });
+  const displayedAppointments = appointments.filter(a => !deletedIds.includes(a.id));
 
   return (
     <div className="max-w-7xl mx-auto animate-in fade-in duration-500">
@@ -306,13 +244,7 @@ const Appointments = () => {
                     </td>
                     <td className="px-8 py-5 text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <button 
-                          onClick={() => handleOpenEdit(a)} 
-                          className="p-2 text-slate-400 hover:text-[var(--color-brand-dark)] hover:bg-slate-50 rounded-xl transition-all"
-                          title="Edit details"
-                        >
-                          <Edit3 size={18} />
-                        </button>
+
                         <button 
                           onClick={() => handleDeleteClick(a.id)} 
                           className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
@@ -358,7 +290,7 @@ const Appointments = () => {
         </div>
       )}
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingId ? "Edit Appointment Details" : "New Appointment Booking"}>
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="New Appointment Booking">
         {apiSuccess ? (
           <div className="p-6 bg-emerald-50 border border-emerald-100 text-emerald-800 rounded-2xl flex flex-col items-center justify-center text-center gap-2">
             <span className="font-bold text-lg">Success!</span>
@@ -450,10 +382,10 @@ const Appointments = () => {
             >
               {submitting ? (
                 <>
-                  <Loader2 size={18} className="animate-spin" /> {editingId ? "Saving Changes..." : "Submitting Live Booking..."}
+                  <Loader2 size={18} className="animate-spin" /> Submitting Live Booking...
                 </>
               ) : (
-                editingId ? "Save Changes" : "Book Appointment"
+                "Book Appointment"
               )}
             </button>
           </form>
