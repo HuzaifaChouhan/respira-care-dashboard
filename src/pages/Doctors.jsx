@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, UserRound, Trash2, Edit3, Loader2, ExternalLink } from 'lucide-react';
 import Modal from '../components/Modal';
 import ConfirmModal from '../components/ConfirmModal';
-import { fetchDoctors, fetchSpecialties, createDoctor, updateDoctor, deleteDoctor } from '../api';
+import { fetchDoctors, fetchSpecialties, createDoctor, updateDoctor, deleteDoctor, uploadImage } from '../api';
 
 const DoctorImage = ({ src, alt }) => {
   const [error, setError] = useState(false);
@@ -47,6 +47,40 @@ const Doctors = () => {
     bio: '',
     photo: ''
   });
+
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+    setError(null);
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = async () => {
+      try {
+        const base64Data = reader.result;
+        const res = await uploadImage(base64Data);
+        if (res && res.url) {
+          setFormData(prev => ({ ...prev, photo: res.url }));
+        } else {
+          setError("Failed to upload image. Please try pasting a direct URL instead.");
+        }
+      } catch (err) {
+        console.error("Image upload failed:", err);
+        setError("Failed to upload image from device. Please try again or paste a URL.");
+      } finally {
+        setUploadingImage(false);
+      }
+    };
+    reader.onerror = (err) => {
+      console.error("FileReader error:", err);
+      setError("Failed to read image file.");
+      setUploadingImage(false);
+    };
+  };
 
   const loadInitialData = async () => {
     try {
@@ -282,8 +316,35 @@ const Doctors = () => {
             </div>
           </div>
           <div>
-            <label className="text-xs font-semibold text-slate-500 block mb-1">Doctor Photo URL</label>
-            <input className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-[var(--color-brand-primary)] text-sm" placeholder="https://example.com/photo.jpg" value={formData.photo} onChange={(e) => setFormData({...formData, photo: e.target.value})} />
+            <label className="text-xs font-semibold text-slate-500 block mb-1">Doctor Photo</label>
+            <div className="flex gap-3 items-center">
+              <input 
+                className="flex-1 bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-[var(--color-brand-primary)] text-sm" 
+                placeholder="Paste photo URL or upload from device" 
+                value={formData.photo} 
+                onChange={(e) => setFormData({...formData, photo: e.target.value})} 
+              />
+              <label className="cursor-pointer shrink-0 bg-slate-100 border border-slate-200 hover:bg-slate-200 p-4 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold text-slate-700 active:scale-95 transition-all">
+                {uploadingImage ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin text-[var(--color-brand-dark)]" />
+                    <span>Uploading...</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus size={16} />
+                    <span>Upload File</span>
+                  </>
+                )}
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  className="hidden" 
+                  disabled={uploadingImage}
+                  onChange={handleFileUpload} 
+                />
+              </label>
+            </div>
           </div>
           <div>
             <label className="text-xs font-semibold text-slate-500 block mb-1">Professional Bio</label>

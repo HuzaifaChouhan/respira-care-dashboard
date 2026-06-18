@@ -31,6 +31,13 @@ async function request(url, options = {}) {
   return await response.json();
 }
 
+export async function uploadImage(base64File) {
+  return await request(`${API_BASE_URL}/upload`, {
+    method: 'POST',
+    body: JSON.stringify({ file: base64File })
+  });
+}
+
 // --- DOCTORS ---
 export async function fetchDoctors() {
   const data = await request(`${API_BASE_URL}/doctors/`);
