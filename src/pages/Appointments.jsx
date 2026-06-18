@@ -300,7 +300,7 @@ const Appointments = () => {
                       </div>
                     </td>
                     <td className="px-6 py-5 text-center">
-                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${a.status === 'pending' ? 'bg-amber-50 text-amber-600' : a.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${a.status === 'pending' ? 'bg-amber-50 text-amber-600' : a.status === 'confirmed' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
                         {a.status}
                       </span>
                     </td>
@@ -324,7 +324,7 @@ const Appointments = () => {
                         {a.status === 'pending' && (
                           <>
                             <button 
-                              onClick={() => handleStatusChange(a.id, 'approved')} 
+                              onClick={() => handleStatusChange(a.id, 'confirmed')} 
                               className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
                               title="Approve Booking"
                             >
@@ -339,7 +339,7 @@ const Appointments = () => {
                             </button>
                           </>
                         )}
-                        {a.status === 'approved' && (
+                        {a.status === 'confirmed' && (
                           <button 
                             onClick={() => handleStatusChange(a.id, 'cancelled')} 
                             className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
