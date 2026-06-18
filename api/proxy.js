@@ -13,6 +13,63 @@ export default async function handler(req, res) {
   // Retrieve the original subpath from the query parameter (forwarded via vercel.json)
   const { path, ...restQuery } = req.query;
 
+  if (req.query.debug === 'true') {
+    try {
+      const mockBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+      const buffer = Buffer.from(mockBase64, 'base64');
+      const boundary = `----VercelUploadBoundary${Math.random().toString(36).substring(2)}`;
+      const part1 = `--${boundary}\r\nContent-Disposition: form-data; name="reqtype"\r\n\r\nfileupload\r\n`;
+      const part2 = `--${boundary}\r\nContent-Disposition: form-data; name="fileToUpload"; filename="image.png"\r\nContent-Type: image/png\r\n\r\n`;
+      const part3 = `\r\n--${boundary}--\r\n`;
+
+      const catboxBuffer = Buffer.concat([
+        Buffer.from(part1, 'utf-8'),
+        Buffer.from(part2, 'utf-8'),
+        buffer,
+        Buffer.from(part3, 'utf-8')
+      ]);
+
+      const url = await new Promise((resolve, reject) => {
+        const options = {
+          hostname: 'catbox.moe',
+          port: 443,
+          path: '/user/api.php',
+          method: 'POST',
+          headers: {
+            'Content-Type': `multipart/form-data; boundary=${boundary}`,
+            'Content-Length': catboxBuffer.length,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+          }
+        };
+
+        const request = https.request(options, (response) => {
+          let data = '';
+          response.on('data', (chunk) => {
+            data += chunk;
+          });
+          response.on('end', () => {
+            resolve(data);
+          });
+        });
+
+        request.on('error', (err) => {
+          reject(err);
+        });
+
+        request.write(catboxBuffer);
+        request.end();
+      });
+
+      return res.status(200).json({
+        nodeVersion: process.version,
+        env: process.env.NODE_ENV,
+        testUrl: url
+      });
+    } catch (err) {
+      return res.status(500).json({ error: 'Debug test failed', message: err.message });
+    }
+  }
+
   if (!path) {
     return res.status(400).json({ error: 'Missing path parameter in proxy routing' });
   }
