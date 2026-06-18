@@ -15,7 +15,7 @@ export default async function handler(req, res) {
 
   if (req.query.debug === 'true') {
     try {
-      const mockBase64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+      const mockBase64 = "iVBORw0KGgoAAAASUVORK5CYII="; // standard clean base64 tail
       const buffer = Buffer.from(mockBase64, 'base64');
       const boundary = `----VercelUploadBoundary${Math.random().toString(36).substring(2)}`;
       const part1 = `--${boundary}\r\nContent-Disposition: form-data; name="reqtype"\r\n\r\nfileupload\r\n`;
@@ -98,7 +98,7 @@ export default async function handler(req, res) {
       }
 
       const mimeType = base64Data.substring(base64Data.indexOf(":") + 1, base64Data.indexOf(";"));
-      const base64Content = base64Data.substring(base64Data.indexOf(",") + 1);
+      const base64Content = base64Data.substring(base64Data.indexOf(",") + 1).replace(/ /g, '+');
       const buffer = Buffer.from(base64Content, 'base64');
       const ext = (mimeType.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
 
