@@ -43,110 +43,38 @@ export default async function handler(req, res) {
       const buffer = Buffer.from(base64Content, 'base64');
       const ext = (mimeType.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
 
-      // Try Catbox first, then Telegra.ph as a fallback
+      // Try Catbox for reliable permanent image uploads (bypassing Telegraph timeouts/blocks)
       try {
-        let uploadUrl = null;
-        
-        // 1. Catbox attempt
-        try {
-          let catboxResponse;
-          if (typeof FormData !== 'undefined' && typeof Blob !== 'undefined') {
-            const formData = new FormData();
-            formData.append('reqtype', 'fileupload');
-            formData.append('fileToUpload', new Blob([buffer], { type: mimeType }), `image.${ext}`);
+        const boundary = `----VercelUploadBoundary${Math.random().toString(36).substring(2)}`;
+        const part1 = `--${boundary}\r\nContent-Disposition: form-data; name="reqtype"\r\n\r\nfileupload\r\n`;
+        const part2 = `--${boundary}\r\nContent-Disposition: form-data; name="fileToUpload"; filename="image.${ext}"\r\nContent-Type: ${mimeType}\r\n\r\n`;
+        const part3 = `\r\n--${boundary}--\r\n`;
 
-            catboxResponse = await fetch('https://catbox.moe/user/api.php', {
-              method: 'POST',
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-              },
-              body: formData
-            });
-          } else {
-            const boundary = `----VercelUploadBoundary${Math.random().toString(36).substring(2)}`;
-            const part1 = `--${boundary}\r\nContent-Disposition: form-data; name="reqtype"\r\n\r\nfileupload\r\n`;
-            const part2 = `--${boundary}\r\nContent-Disposition: form-data; name="fileToUpload"; filename="image.${ext}"\r\nContent-Type: ${mimeType}\r\n\r\n`;
-            const part3 = `\r\n--${boundary}--\r\n`;
+        const catboxBuffer = Buffer.concat([
+          Buffer.from(part1, 'utf-8'),
+          Buffer.from(part2, 'utf-8'),
+          buffer,
+          Buffer.from(part3, 'utf-8')
+        ]);
 
-            const catboxBuffer = Buffer.concat([
-              Buffer.from(part1, 'utf-8'),
-              Buffer.from(part2, 'utf-8'),
-              buffer,
-              Buffer.from(part3, 'utf-8')
-            ]);
+        const response = await fetch('https://catbox.moe/user/api.php', {
+          method: 'POST',
+          headers: {
+            'Content-Type': `multipart/form-data; boundary=${boundary}`,
+            'Content-Length': catboxBuffer.length.toString(),
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+          },
+          body: catboxBuffer
+        });
 
-            catboxResponse = await fetch('https://catbox.moe/user/api.php', {
-              method: 'POST',
-              headers: {
-                'Content-Type': `multipart/form-data; boundary=${boundary}`,
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-              },
-              body: catboxBuffer
-            });
-          }
-
-          const catboxUrl = await catboxResponse.text();
-          if (catboxUrl && catboxUrl.startsWith('http')) {
-            uploadUrl = catboxUrl;
-          }
-        } catch (catboxErr) {
-          console.warn("Serverless Catbox upload failed:", catboxErr);
+        const url = await response.text();
+        if (url && url.startsWith('http')) {
+          return res.status(200).json({ url });
         }
-
-        // 2. Telegraph attempt if Catbox failed
-        if (!uploadUrl) {
-          try {
-            let telegraphResponse;
-            if (typeof FormData !== 'undefined' && typeof Blob !== 'undefined') {
-              const formData = new FormData();
-              formData.append('file', new Blob([buffer], { type: mimeType }), `image.${ext}`);
-
-              telegraphResponse = await fetch('https://telegra.ph/upload', {
-                method: 'POST',
-                headers: {
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-                },
-                body: formData
-              });
-            } else {
-              const boundary = `----VercelUploadBoundary${Math.random().toString(36).substring(2)}`;
-              const part = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="image.${ext}"\r\nContent-Type: ${mimeType}\r\n\r\n`;
-              const partEnd = `\r\n--${boundary}--\r\n`;
-
-              const telegraphBuffer = Buffer.concat([
-                Buffer.from(part, 'utf-8'),
-                buffer,
-                Buffer.from(partEnd, 'utf-8')
-              ]);
-
-              telegraphResponse = await fetch('https://telegra.ph/upload', {
-                method: 'POST',
-                headers: {
-                  'Content-Type': `multipart/form-data; boundary=${boundary}`,
-                  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-                },
-                body: telegraphBuffer
-              });
-            }
-
-            if (telegraphResponse.ok) {
-              const json = await telegraphResponse.json();
-              if (Array.isArray(json) && json[0] && json[0].src) {
-                uploadUrl = `https://telegra.ph${json[0].src}`;
-              }
-            }
-          } catch (telegraphErr) {
-            console.warn("Serverless Telegraph upload failed:", telegraphErr);
-          }
-        }
-
-        if (uploadUrl) {
-          return res.status(200).json({ url: uploadUrl });
-        }
-        return res.status(500).json({ error: 'All upload providers failed', message: 'Unable to upload image to Catbox or Telegra.ph' });
+        return res.status(500).json({ error: 'Catbox did not return a valid URL', message: url });
       } catch (err) {
-        console.error("Catbox/Telegraph upload handler failed:", err);
-        return res.status(500).json({ error: 'Catbox/Telegraph upload failed', message: err.message });
+        console.error("Catbox upload failed:", err);
+        return res.status(500).json({ error: 'Catbox upload failed', message: err.message });
       }
     } catch (err) {
       console.error('Upload handler error:', err);
