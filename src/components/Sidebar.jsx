@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, UserRound, Building2, CalendarCheck, LogOut, Activity, X } from 'lucide-react';
+import { LayoutDashboard, UserRound, Stethoscope, BriefcaseMedical, CalendarCheck, LogOut, Activity, X } from 'lucide-react';
 
 const Sidebar = ({ isOpen, onClose, onLogout }) => {
   const navItems = [
     { icon: LayoutDashboard, label: 'Overview', path: '/' },
     { icon: UserRound, label: 'Doctors', path: '/doctors' },
-    { icon: Building2, label: 'Departments', path: '/departments' },
+    { icon: Stethoscope, label: 'Specialties', path: '/specialties' },
+    { icon: BriefcaseMedical, label: 'Services', path: '/services' },
     { icon: CalendarCheck, label: 'Appointments', path: '/appointments' },
   ];
 

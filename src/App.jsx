@@ -5,7 +5,8 @@ import Header from './components/Header';
 import Login from './components/Login';
 import Overview from './pages/Overview';
 import Doctors from './pages/Doctors';
-import Departments from './pages/Departments';
+import Specialties from './pages/Specialties';
+import Services from './pages/Services';
 import Appointments from './pages/Appointments';
 
 function App() {
@@ -26,7 +27,8 @@ function App() {
           <Routes>
             <Route path="/" element={<Overview />} />
             <Route path="/doctors" element={<Doctors />} />
-            <Route path="/departments" element={<Departments />} />
+            <Route path="/specialties" element={<Specialties />} />
+            <Route path="/services" element={<Services />} />
             <Route path="/appointments" element={<Appointments />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
