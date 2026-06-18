@@ -4,6 +4,30 @@ import Modal from '../components/Modal';
 import ConfirmModal from '../components/ConfirmModal';
 import { fetchDoctors, fetchSpecialties, createDoctor, updateDoctor, deleteDoctor } from '../api';
 
+const DoctorImage = ({ src, alt }) => {
+  const [error, setError] = useState(false);
+  // Reset error state if src changes
+  useEffect(() => {
+    setError(false);
+  }, [src]);
+
+  if (!src || error) {
+    return (
+      <div className="w-12 h-12 rounded-xl bg-cyan-50 flex items-center justify-center text-[var(--color-brand-dark)]">
+        <UserRound size={24} />
+      </div>
+    );
+  }
+  return (
+    <img 
+      src={src} 
+      alt={alt} 
+      className="w-12 h-12 rounded-xl object-cover border border-slate-100"
+      onError={() => setError(true)}
+    />
+  );
+};
+
 const Doctors = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
@@ -20,7 +44,8 @@ const Doctors = () => {
     specialty: '', // Will store specialty ID
     qualification: '',
     experience_years: '',
-    bio: ''
+    bio: '',
+    photo: ''
   });
 
   const loadInitialData = async () => {
@@ -47,7 +72,7 @@ const Doctors = () => {
 
   const handleOpenAdd = () => {
     setEditingItem(null);
-    setFormData({ name: '', specialty: '', qualification: '', experience_years: '', bio: '' });
+    setFormData({ name: '', specialty: '', qualification: '', experience_years: '', bio: '', photo: '' });
     setIsModalOpen(true);
   };
 
@@ -60,7 +85,8 @@ const Doctors = () => {
       specialty: matchedSpec ? matchedSpec.id.toString() : '',
       qualification: doc.qualification || '',
       experience_years: doc.experience_years || '',
-      bio: doc.bio || ''
+      bio: doc.bio || '',
+      photo: doc.photo_url || ''
     });
     setIsModalOpen(true);
   };
@@ -92,12 +118,23 @@ const Doctors = () => {
     setSubmitting(true);
     setError(null);
 
+    let photoPayload = formData.photo || null;
+    if (photoPayload && (photoPayload.startsWith('http://') || photoPayload.startsWith('https://'))) {
+      const match = photoPayload.match(/\.(png|jpg|jpeg|gif|webp|svg)/i);
+      if (match) {
+        photoPayload = photoPayload + match[0];
+      } else {
+        photoPayload = photoPayload + '.jpg.jpg';
+      }
+    }
+
     const payload = {
       name: formData.name,
       specialty: formData.specialty ? parseInt(formData.specialty) : null,
       qualification: formData.qualification,
       experience_years: parseInt(formData.experience_years) || 0,
       bio: formData.bio,
+      photo: photoPayload,
       is_active: true
     };
 
@@ -169,9 +206,7 @@ const Doctors = () => {
                 <div key={doc.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm relative group flex flex-col justify-between hover:shadow-md transition-shadow">
                   <div>
                     <div className="flex justify-between items-start mb-4">
-                      <div className="w-12 h-12 rounded-xl bg-cyan-50 flex items-center justify-center text-[var(--color-brand-dark)]">
-                        <UserRound size={24} />
-                      </div>
+                      <DoctorImage src={doc.photo_url} alt={doc.name} />
                       <div className="flex gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => handleOpenEdit(doc)} className="p-2 text-slate-400 hover:text-[var(--color-brand-dark)]"><Edit3 size={18} /></button>
                         <button onClick={() => handleDeleteClick(doc)} className="p-2 text-slate-400 hover:text-red-500"><Trash2 size={18} /></button>
@@ -245,6 +280,10 @@ const Doctors = () => {
               <label className="text-xs font-semibold text-slate-500 block mb-1">Years of Experience</label>
               <input type="number" required className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-[var(--color-brand-primary)] text-sm" placeholder="e.g. 5" value={formData.experience_years} onChange={(e) => setFormData({...formData, experience_years: e.target.value})} />
             </div>
+          </div>
+          <div>
+            <label className="text-xs font-semibold text-slate-500 block mb-1">Doctor Photo URL</label>
+            <input className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-[var(--color-brand-primary)] text-sm" placeholder="https://example.com/photo.jpg" value={formData.photo} onChange={(e) => setFormData({...formData, photo: e.target.value})} />
           </div>
           <div>
             <label className="text-xs font-semibold text-slate-500 block mb-1">Professional Bio</label>

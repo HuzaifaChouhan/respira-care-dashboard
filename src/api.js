@@ -1,13 +1,16 @@
 const API_BASE_URL = '/api';
 
-// --- Utility function for handling request errors ---
 async function request(url, options = {}) {
+  const headers = { ...options.headers };
+  if (options.body && !(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  } else if (!options.body) {
+    headers['Content-Type'] = 'application/json';
+  }
+
   const response = await fetch(url, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers,
   });
 
   if (!response.ok) {
