@@ -21,7 +21,19 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: 'Method not allowed' });
     }
     try {
-      const base64Data = req.body.file;
+      let bodyObj = req.body;
+      if (Buffer.isBuffer(bodyObj)) {
+        bodyObj = bodyObj.toString('utf-8');
+      }
+      if (typeof bodyObj === 'string') {
+        try {
+          bodyObj = JSON.parse(bodyObj);
+        } catch (e) {
+          console.error("JSON parse error on req.body string:", e);
+        }
+      }
+
+      const base64Data = bodyObj ? bodyObj.file : null;
       if (!base64Data) {
         return res.status(400).json({ error: 'Missing file parameter' });
       }
@@ -29,16 +41,26 @@ export default async function handler(req, res) {
       const mimeType = base64Data.substring(base64Data.indexOf(":") + 1, base64Data.indexOf(";"));
       const base64Content = base64Data.substring(base64Data.indexOf(",") + 1);
       const buffer = Buffer.from(base64Content, 'base64');
+      const ext = (mimeType.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
 
       // 1. Try Telegraph
       try {
-        const formData = new FormData();
-        const blob = new Blob([buffer], { type: mimeType });
-        formData.append('file', blob, 'image.' + mimeType.split('/')[1]);
+        const boundary = `----VercelUploadBoundary${Math.random().toString(36).substring(2)}`;
+        const header = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="image.${ext}"\r\nContent-Type: ${mimeType}\r\n\r\n`;
+        const footer = `\r\n--${boundary}--\r\n`;
+
+        const bodyBuffer = Buffer.concat([
+          Buffer.from(header, 'utf-8'),
+          buffer,
+          Buffer.from(footer, 'utf-8')
+        ]);
 
         const response = await fetch('https://telegra.ph/upload', {
           method: 'POST',
-          body: formData
+          headers: {
+            'Content-Type': `multipart/form-data; boundary=${boundary}`
+          },
+          body: bodyBuffer
         });
 
         const data = await response.json();
@@ -51,14 +73,24 @@ export default async function handler(req, res) {
 
       // 2. Try Catbox as fallback
       try {
-        const formData = new FormData();
-        const blob = new Blob([buffer], { type: mimeType });
-        formData.append('reqtype', 'fileupload');
-        formData.append('fileToUpload', blob, 'image.' + mimeType.split('/')[1]);
+        const boundary = `----VercelUploadBoundary${Math.random().toString(36).substring(2)}`;
+        const part1 = `--${boundary}\r\nContent-Disposition: form-data; name="reqtype"\r\n\r\nfileupload\r\n`;
+        const part2 = `--${boundary}\r\nContent-Disposition: form-data; name="fileToUpload"; filename="image.${ext}"\r\nContent-Type: ${mimeType}\r\n\r\n`;
+        const part3 = `\r\n--${boundary}--\r\n`;
+
+        const catboxBuffer = Buffer.concat([
+          Buffer.from(part1, 'utf-8'),
+          Buffer.from(part2, 'utf-8'),
+          buffer,
+          Buffer.from(part3, 'utf-8')
+        ]);
 
         const response = await fetch('https://catbox.moe/user/api.php', {
           method: 'POST',
-          body: formData
+          headers: {
+            'Content-Type': `multipart/form-data; boundary=${boundary}`
+          },
+          body: catboxBuffer
         });
 
         const url = await response.text();

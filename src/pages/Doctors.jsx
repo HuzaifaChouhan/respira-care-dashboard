@@ -59,24 +59,55 @@ const Doctors = () => {
 
     const reader = new FileReader();
     reader.readAsDataURL(file);
-    reader.onload = async () => {
-      try {
-        const base64Data = reader.result;
-        const res = await uploadImage(base64Data);
-        if (res && res.url) {
-          setFormData(prev => ({ ...prev, photo: res.url }));
-        } else {
-          setError("Failed to upload image. Please try pasting a direct URL instead.");
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target.result;
+      img.onload = async () => {
+        // Limit dimensions to 800px width/height maximum
+        const maxDim = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
         }
-      } catch (err) {
-        console.error("Image upload failed:", err);
-        setError("Failed to upload image from device. Please try again or paste a URL.");
-      } finally {
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Compress as 80% quality JPEG
+        const base64Data = canvas.toDataURL('image/jpeg', 0.8);
+        
+        try {
+          const res = await uploadImage(base64Data);
+          if (res && res.url) {
+            setFormData(prev => ({ ...prev, photo: res.url }));
+          } else {
+            setError("Failed to upload image from device.");
+          }
+        } catch (err) {
+          console.error("Image upload failed:", err);
+          setError("Failed to upload image from device. Please try again.");
+        } finally {
+          setUploadingImage(false);
+        }
+      };
+      img.onerror = () => {
+        setError("Failed to process image file.");
         setUploadingImage(false);
-      }
+      };
     };
-    reader.onerror = (err) => {
-      console.error("FileReader error:", err);
+    reader.onerror = () => {
       setError("Failed to read image file.");
       setUploadingImage(false);
     };
@@ -316,34 +347,53 @@ const Doctors = () => {
             </div>
           </div>
           <div>
-            <label className="text-xs font-semibold text-slate-500 block mb-1">Doctor Photo</label>
-            <div className="flex gap-3 items-center">
-              <input 
-                className="flex-1 bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-[var(--color-brand-primary)] text-sm" 
-                placeholder="Paste photo URL or upload from device" 
-                value={formData.photo} 
-                onChange={(e) => setFormData({...formData, photo: e.target.value})} 
-              />
-              <label className="cursor-pointer shrink-0 bg-slate-100 border border-slate-200 hover:bg-slate-200 p-4 rounded-2xl flex items-center justify-center gap-2 text-sm font-bold text-slate-700 active:scale-95 transition-all">
-                {uploadingImage ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin text-[var(--color-brand-dark)]" />
-                    <span>Uploading...</span>
-                  </>
+            <label className="text-xs font-semibold text-slate-500 block mb-2">Doctor Photo</label>
+            <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-3xl border border-slate-100">
+              <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-cyan-50 flex items-center justify-center border border-slate-100 shrink-0">
+                {formData.photo ? (
+                  <img 
+                    src={formData.photo} 
+                    alt="Preview" 
+                    className="w-full h-full object-cover" 
+                  />
                 ) : (
-                  <>
-                    <Plus size={16} />
-                    <span>Upload File</span>
-                  </>
+                  <UserRound size={28} className="text-[var(--color-brand-dark)]" />
                 )}
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  className="hidden" 
-                  disabled={uploadingImage}
-                  onChange={handleFileUpload} 
-                />
-              </label>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <div className="flex gap-2">
+                  <label className="cursor-pointer bg-[var(--color-brand-dark)] hover:opacity-90 text-white px-4 py-2 rounded-xl text-xs font-bold active:scale-95 transition-all flex items-center gap-1.5 shadow-sm">
+                    {uploadingImage ? (
+                      <>
+                        <Loader2 size={12} className="animate-spin" />
+                        <span>Uploading...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Plus size={12} />
+                        <span>Upload Photo</span>
+                      </>
+                    )}
+                    <input 
+                      type="file" 
+                      accept="image/*" 
+                      className="hidden" 
+                      disabled={uploadingImage}
+                      onChange={handleFileUpload} 
+                    />
+                  </label>
+                  {formData.photo && (
+                    <button 
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, photo: '' }))}
+                      className="px-4 py-2 border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-xl text-xs font-bold transition-all active:scale-95"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-400">Supported formats: JPG, PNG, WEBP (Max 4MB)</p>
+              </div>
             </div>
           </div>
           <div>
