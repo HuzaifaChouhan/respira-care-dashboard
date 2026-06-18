@@ -8,8 +8,16 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
-  // req.url contains "/api/subpath?query=..."
-  const targetUrl = `https://api.husnoorinfotech.in${req.url}`;
+  // Retrieve the original subpath from the query parameter (forwarded via vercel.json)
+  const { path, ...restQuery } = req.query;
+
+  if (!path) {
+    return res.status(400).json({ error: 'Missing path parameter in proxy routing' });
+  }
+
+  // Reconstruct any other query parameters (e.g. search, pagination)
+  const queryParams = new URLSearchParams(restQuery).toString();
+  const targetUrl = `https://api.husnoorinfotech.in/api/${path}${queryParams ? '?' + queryParams : ''}`;
 
   try {
     let body = undefined;
