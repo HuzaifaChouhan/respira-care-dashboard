@@ -1,47 +1,133 @@
-const API_BASE_URL = 'https://api.husnoorinfotech.in/api';
+const API_BASE_URL = '/api';
 
-export async function fetchDoctors() {
-  const response = await fetch(`${API_BASE_URL}/doctors/`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch doctors: ${response.statusText}`);
-  }
-  const data = await response.json();
-  return data.results || [];
-}
-
-export async function fetchSpecialties() {
-  const response = await fetch(`${API_BASE_URL}/specialties/`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch specialties: ${response.statusText}`);
-  }
-  const data = await response.json();
-  return data.results || [];
-}
-
-export async function fetchServices() {
-  const response = await fetch(`${API_BASE_URL}/services/`);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch services: ${response.statusText}`);
-  }
-  const data = await response.json();
-  return data.results || [];
-}
-
-export async function createAppointment(appointmentData) {
-  const response = await fetch(`${API_BASE_URL}/appointments/`, {
-    method: 'POST',
+// --- Utility function for handling request errors ---
+async function request(url, options = {}) {
+  const response = await fetch(url, {
+    ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...options.headers,
     },
-    body: JSON.stringify(appointmentData),
   });
+
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
+    let details = {};
+    try {
+      details = await response.json();
+    } catch (e) {}
     throw {
       status: response.status,
-      message: `Failed to create appointment: ${response.statusText}`,
-      details: errorData,
+      message: `API request failed on ${url}`,
+      details,
     };
   }
+
+  // DELETE requests might return no body (e.g. 204 No Content), check if there is content
+  if (response.status === 204) return null;
+  
   return await response.json();
+}
+
+// --- DOCTORS ---
+export async function fetchDoctors() {
+  const data = await request(`${API_BASE_URL}/doctors/`);
+  return data.results || [];
+}
+
+export async function createDoctor(doctorData) {
+  return await request(`${API_BASE_URL}/doctors/`, {
+    method: 'POST',
+    body: JSON.stringify(doctorData),
+  });
+}
+
+export async function updateDoctor(id, doctorData) {
+  return await request(`${API_BASE_URL}/doctors/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(doctorData),
+  });
+}
+
+export async function deleteDoctor(id) {
+  return await request(`${API_BASE_URL}/doctors/${id}/`, {
+    method: 'DELETE',
+  });
+}
+
+// --- SPECIALTIES ---
+export async function fetchSpecialties() {
+  const data = await request(`${API_BASE_URL}/specialties/`);
+  return data.results || [];
+}
+
+export async function createSpecialty(specialtyData) {
+  return await request(`${API_BASE_URL}/specialties/`, {
+    method: 'POST',
+    body: JSON.stringify(specialtyData),
+  });
+}
+
+export async function updateSpecialty(id, specialtyData) {
+  return await request(`${API_BASE_URL}/specialties/${id}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(specialtyData),
+  });
+}
+
+export async function deleteSpecialty(id) {
+  return await request(`${API_BASE_URL}/specialties/${id}/`, {
+    method: 'DELETE',
+  });
+}
+
+// --- CONDITIONS ---
+export async function createCondition(conditionData) {
+  return await request(`${API_BASE_URL}/conditions/`, {
+    method: 'POST',
+    body: JSON.stringify(conditionData),
+  });
+}
+
+export async function deleteCondition(id) {
+  return await request(`${API_BASE_URL}/conditions/${id}/`, {
+    method: 'DELETE',
+  });
+}
+
+// --- SERVICES ---
+export async function fetchServices() {
+  const data = await request(`${API_BASE_URL}/services/`);
+  return data.results || [];
+}
+
+export async function fetchServiceDetail(slug) {
+  return await request(`${API_BASE_URL}/services/${slug}/`);
+}
+
+export async function createService(serviceData) {
+  return await request(`${API_BASE_URL}/services/`, {
+    method: 'POST',
+    body: JSON.stringify(serviceData),
+  });
+}
+
+export async function updateService(slug, serviceData) {
+  return await request(`${API_BASE_URL}/services/${slug}/`, {
+    method: 'PATCH',
+    body: JSON.stringify(serviceData),
+  });
+}
+
+export async function deleteService(slug) {
+  return await request(`${API_BASE_URL}/services/${slug}/`, {
+    method: 'DELETE',
+  });
+}
+
+// --- APPOINTMENTS ---
+export async function createAppointment(appointmentData) {
+  return await request(`${API_BASE_URL}/appointments/`, {
+    method: 'POST',
+    body: JSON.stringify(appointmentData),
+  });
 }

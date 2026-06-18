@@ -8,4 +8,13 @@ export default defineConfig({
     react(),
     tailwindcss(), // 2. Add this to plugins
   ],
+  server: {
+    proxy: {
+      '/api': {
+        target: 'https://api.husnoorinfotech.in',
+        changeOrigin: true,
+        secure: false,
+      }
+    }
+  }
 })

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, UserRound, Trash2, Edit3, Loader2, ExternalLink } from 'lucide-react';
 import Modal from '../components/Modal';
 import ConfirmModal from '../components/ConfirmModal';
-import { fetchDoctors } from '../api';
+import { fetchDoctors, fetchSpecialties, createDoctor, updateDoctor, deleteDoctor } from '../api';
 
 const Doctors = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -10,55 +10,54 @@ const Doctors = () => {
   const [itemToDelete, setItemToDelete] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
   const [doctors, setDoctors] = useState([]);
+  const [specialties, setSpecialties] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+
   const [formData, setFormData] = useState({
     name: '',
-    specialty_name: '',
+    specialty: '', // Will store specialty ID
     qualification: '',
     experience_years: '',
     bio: ''
   });
 
-  const loadDoctorsData = async () => {
+  const loadInitialData = async () => {
     try {
       setLoading(true);
-      const apiDoctors = await fetchDoctors();
-      
-      const localDoctors = JSON.parse(localStorage.getItem('respira_doctors_local')) || [];
-      const deletedIds = JSON.parse(localStorage.getItem('respira_doctors_deleted')) || [];
-      const updatedDocs = JSON.parse(localStorage.getItem('respira_doctors_updated')) || {};
-
-      const filteredApi = apiDoctors
-        .filter(d => !deletedIds.includes(d.id))
-        .map(d => updatedDocs[d.id] ? { ...d, ...updatedDocs[d.id] } : d);
-
-      setDoctors([...filteredApi, ...localDoctors]);
+      const [apiDoctors, apiSpecialties] = await Promise.all([
+        fetchDoctors(),
+        fetchSpecialties()
+      ]);
+      setDoctors(apiDoctors);
+      setSpecialties(apiSpecialties);
       setError(null);
     } catch (err) {
-      console.error("Error fetching doctors:", err);
-      setError("Failed to sync with live API. Displaying offline cached records.");
-      setDoctors(JSON.parse(localStorage.getItem('respira_doctors_local')) || []);
+      console.error("Error loading doctors/specialties:", err);
+      setError("Failed to sync with live API. Please try again later.");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadDoctorsData();
+    loadInitialData();
   }, []);
 
   const handleOpenAdd = () => {
     setEditingItem(null);
-    setFormData({ name: '', specialty_name: '', qualification: '', experience_years: '', bio: '' });
+    setFormData({ name: '', specialty: '', qualification: '', experience_years: '', bio: '' });
     setIsModalOpen(true);
   };
 
   const handleOpenEdit = (doc) => {
     setEditingItem(doc);
+    // Find matching specialty ID from the name
+    const matchedSpec = specialties.find(s => s.name === doc.specialty_name);
     setFormData({
       name: doc.name || '',
-      specialty_name: doc.specialty_name || '',
+      specialty: matchedSpec ? matchedSpec.id.toString() : '',
       qualification: doc.qualification || '',
       experience_years: doc.experience_years || '',
       bio: doc.bio || ''
@@ -71,57 +70,60 @@ const Doctors = () => {
     setIsConfirmOpen(true);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!itemToDelete) return;
-    const doc = itemToDelete;
-    const isLocal = typeof doc.id === 'string' || doc.id > 1000000;
-    
-    if (isLocal) {
-      const localDoctors = JSON.parse(localStorage.getItem('respira_doctors_local')) || [];
-      const filtered = localDoctors.filter(d => d.id !== doc.id);
-      localStorage.setItem('respira_doctors_local', JSON.stringify(filtered));
-    } else {
-      const deletedIds = JSON.parse(localStorage.getItem('respira_doctors_deleted')) || [];
-      if (!deletedIds.includes(doc.id)) {
-        deletedIds.push(doc.id);
-        localStorage.setItem('respira_doctors_deleted', JSON.stringify(deletedIds));
-      }
+    try {
+      setLoading(true);
+      await deleteDoctor(itemToDelete.id);
+      // Remove from state immediately
+      setDoctors(doctors.filter(d => d.id !== itemToDelete.id));
+      setItemToDelete(null);
+      setError(null);
+    } catch (err) {
+      console.error("Failed to delete doctor:", err);
+      setError("Failed to delete doctor from the live database.");
+    } finally {
+      setLoading(false);
     }
-    setDoctors(doctors.filter(d => d.id !== doc.id));
-    setItemToDelete(null);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const formattedExp = parseInt(formData.experience_years) || 0;
-    
-    if (editingItem) {
-      const isLocal = typeof editingItem.id === 'string' || editingItem.id > 1000000;
-      const updatedItem = { ...editingItem, ...formData, experience_years: formattedExp };
-      
-      if (isLocal) {
-        const localDoctors = JSON.parse(localStorage.getItem('respira_doctors_local')) || [];
-        const updated = localDoctors.map(d => d.id === editingItem.id ? updatedItem : d);
-        localStorage.setItem('respira_doctors_local', JSON.stringify(updated));
+    setSubmitting(true);
+    setError(null);
+
+    const payload = {
+      name: formData.name,
+      specialty: formData.specialty ? parseInt(formData.specialty) : null,
+      qualification: formData.qualification,
+      experience_years: parseInt(formData.experience_years) || 0,
+      bio: formData.bio,
+      is_active: true
+    };
+
+    try {
+      if (editingItem) {
+        await updateDoctor(editingItem.id, payload);
       } else {
-        const updatedDocs = JSON.parse(localStorage.getItem('respira_doctors_updated')) || {};
-        updatedDocs[editingItem.id] = { ...formData, experience_years: formattedExp };
-        localStorage.setItem('respira_doctors_updated', JSON.stringify(updatedDocs));
+        await createDoctor(payload);
       }
       
-      setDoctors(doctors.map(d => d.id === editingItem.id ? updatedItem : d));
-    } else {
-      const newDoc = {
-        ...formData,
-        experience_years: formattedExp,
-        id: Date.now(),
-        is_active: true
-      };
-      const localDoctors = JSON.parse(localStorage.getItem('respira_doctors_local')) || [];
-      localStorage.setItem('respira_doctors_local', JSON.stringify([newDoc, ...localDoctors]));
-      setDoctors([newDoc, ...doctors]);
+      // Refresh list to pull updated/created names and references from backend
+      const updatedDocs = await fetchDoctors();
+      setDoctors(updatedDocs);
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error("Failed to save doctor:", err);
+      let errMsg = "Failed to save changes to database.";
+      if (err.details) {
+        errMsg = Object.entries(err.details)
+          .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(' ') : v}`)
+          .join('\n');
+      }
+      setError(errMsg);
+    } finally {
+      setSubmitting(false);
     }
-    setIsModalOpen(false);
   };
 
   return (
@@ -129,34 +131,21 @@ const Doctors = () => {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Doctors</h1>
-          <p className="text-slate-500 text-sm">Managing specialist staff from live API</p>
+          <p className="text-slate-500 text-sm">Auditing and managing clinic staff profiles</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
-          <a 
-            href="https://api.husnoorinfotech.in/admin/" 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="flex items-center justify-center gap-2 px-5 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-bold text-sm transition-all"
-          >
-            Django Admin <ExternalLink size={16} />
-          </a>
           <button 
             onClick={handleOpenAdd} 
-            className="flex items-center justify-center gap-2 px-6 py-3.5 bg-[var(--color-brand-dark)] text-white rounded-2xl font-bold shadow-lg active:scale-95 transition-all"
+            disabled={loading}
+            className="flex items-center justify-center gap-2 px-6 py-3.5 bg-[var(--color-brand-dark)] text-white rounded-2xl font-bold shadow-lg active:scale-95 transition-all disabled:opacity-50"
           >
             <Plus size={20} /> Add Doctor
           </button>
         </div>
       </div>
 
-      <div className="mb-6 bg-cyan-50/50 border border-cyan-100 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <p className="text-cyan-800 text-sm leading-relaxed">
-          <b>Admin Note:</b> Changes made below are saved in your local session. To permanently update the shared central database, click the <b>Django Admin</b> button.
-        </p>
-      </div>
-
       {error && (
-        <div className="mb-6 p-4 bg-amber-50 border border-amber-100 text-amber-800 rounded-2xl text-sm font-medium">
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-100 text-amber-800 rounded-2xl text-sm font-medium whitespace-pre-wrap">
           {error}
         </div>
       )}
@@ -172,7 +161,7 @@ const Doctors = () => {
             <div className="text-center py-20 bg-white border border-slate-100 rounded-[32px] text-slate-400">
               <UserRound size={48} className="mx-auto mb-4 opacity-50" />
               <p className="font-bold text-lg">No doctors found</p>
-              <p className="text-sm">Click "Add Doctor" to create a new profile locally.</p>
+              <p className="text-sm">Click "Add Doctor" to create a new profile.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -218,11 +207,7 @@ const Doctors = () => {
 
                   <div className="border-t border-slate-50 mt-6 pt-4 flex justify-between items-center text-xs text-slate-400">
                     <span>ID: #{doc.id}</span>
-                    {typeof doc.id === 'number' && doc.id <= 100000 ? (
-                      <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-md">API Live</span>
-                    ) : (
-                      <span className="text-cyan-600 font-bold bg-cyan-50 px-2 py-0.5 rounded-md">Local Override</span>
-                    )}
+                    <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded-md">Live Sync</span>
                   </div>
                 </div>
               ))}
@@ -235,28 +220,48 @@ const Doctors = () => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="text-xs font-semibold text-slate-500 block mb-1">Doctor Name</label>
-            <input required className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-[var(--color-brand-primary)]" placeholder="Dr. John Doe" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
+            <input required className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-[var(--color-brand-primary)] text-sm" placeholder="Dr. John Doe" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} />
           </div>
           <div>
-            <label className="text-xs font-semibold text-slate-500 block mb-1">Specialty Name</label>
-            <input required className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-[var(--color-brand-primary)]" placeholder="e.g. Neuro Physiotherapy" value={formData.specialty_name} onChange={(e) => setFormData({...formData, specialty_name: e.target.value})} />
+            <label className="text-xs font-semibold text-slate-500 block mb-1">Select Specialty</label>
+            <select 
+              required 
+              className="w-full bg-slate-50 border border-slate-200 py-3.5 px-4 rounded-2xl outline-none text-sm cursor-pointer"
+              value={formData.specialty}
+              onChange={(e) => setFormData({...formData, specialty: e.target.value})}
+            >
+              <option value="">-- Choose Specialty --</option>
+              {specialties.map(spec => (
+                <option key={spec.id} value={spec.id}>{spec.name}</option>
+              ))}
+            </select>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-semibold text-slate-500 block mb-1">Qualification</label>
-              <input required className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-[var(--color-brand-primary)]" placeholder="BPT, MPT" value={formData.qualification} onChange={(e) => setFormData({...formData, qualification: e.target.value})} />
+              <input required className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-[var(--color-brand-primary)] text-sm" placeholder="BPT, MPT" value={formData.qualification} onChange={(e) => setFormData({...formData, qualification: e.target.value})} />
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-500 block mb-1">Years of Experience</label>
-              <input type="number" required className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-[var(--color-brand-primary)]" placeholder="e.g. 5" value={formData.experience_years} onChange={(e) => setFormData({...formData, experience_years: e.target.value})} />
+              <input type="number" required className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-[var(--color-brand-primary)] text-sm" placeholder="e.g. 5" value={formData.experience_years} onChange={(e) => setFormData({...formData, experience_years: e.target.value})} />
             </div>
           </div>
           <div>
             <label className="text-xs font-semibold text-slate-500 block mb-1">Professional Bio</label>
-            <textarea className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-[var(--color-brand-primary)] h-24 resize-none" placeholder="Short description of the doctor's experience..." value={formData.bio} onChange={(e) => setFormData({...formData, bio: e.target.value})} />
+            <textarea className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-[var(--color-brand-primary)] h-24 resize-none text-sm" placeholder="Short description of the doctor's experience..." value={formData.bio} onChange={(e) => setFormData({...formData, bio: e.target.value})} />
           </div>
-          <button type="submit" className="w-full py-4 bg-[var(--color-brand-dark)] text-white rounded-2xl font-bold shadow-lg hover:opacity-95 transition-opacity">
-            {editingItem ? "Save Changes" : "Create Profile"}
+          <button 
+            type="submit" 
+            disabled={submitting}
+            className="w-full py-4 bg-[var(--color-brand-dark)] text-white rounded-2xl font-bold shadow-lg hover:opacity-95 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {submitting ? (
+              <>
+                <Loader2 size={18} className="animate-spin" /> Saving Live...
+              </>
+            ) : (
+              editingItem ? "Save Changes" : "Create Profile"
+            )}
           </button>
         </form>
       </Modal>
@@ -266,7 +271,7 @@ const Doctors = () => {
         onClose={() => setIsConfirmOpen(false)} 
         onConfirm={handleConfirmDelete} 
         title="Delete Doctor Profile" 
-        message={`Are you sure you want to remove ${itemToDelete?.name}? This action cannot be undone.`} 
+        message={`Are you sure you want to permanently remove ${itemToDelete?.name}? This action immediately updates the central database.`} 
       />
     </div>
   );

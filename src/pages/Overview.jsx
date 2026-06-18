@@ -80,14 +80,14 @@ const Overview = () => {
         <div className="w-20 h-20 bg-cyan-50 text-[var(--color-brand-dark)] rounded-3xl flex items-center justify-center mb-6 shadow-inner animate-pulse">
           <LayoutDashboard size={40} />
         </div>
-        <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Admin Console Connected</h2>
+        <h2 className="text-2xl font-bold text-slate-800 tracking-tight">System Active</h2>
         <p className="text-slate-400 mt-2 max-w-md leading-relaxed">
-          The dashboard is successfully linked to the live API at <b>api.husnoorinfotech.in</b>. Use the navigation panel to view and audit doctors, medical specialties, and active hospital services.
+          The management console is online. Access clinical resources, schedule patients, and audit medical specialties using the navigation panel.
         </p>
         
         <div className="mt-8 flex gap-3 flex-wrap justify-center">
             <div className="px-4 py-2 bg-emerald-50 text-emerald-600 rounded-full text-xs font-bold uppercase tracking-wider">
-                API Connected
+                System Online
             </div>
             <div className="px-4 py-2 bg-slate-50 text-slate-400 rounded-full text-xs font-bold uppercase tracking-wider">
                 v3.0.0

@@ -153,12 +153,6 @@ const Appointments = () => {
         </button>
       </div>
 
-      <div className="mb-6 bg-cyan-50/50 border border-cyan-100 p-4 rounded-2xl flex items-center gap-3">
-        <Info size={20} className="text-cyan-700 shrink-0" />
-        <p className="text-cyan-800 text-sm leading-relaxed">
-          <b>Live Backend Integration:</b> Creating a new appointment triggers a live `POST` request directly to `https://api.husnoorinfotech.in/api/appointments/`. Since GET lists are write-restricted, the dashboard stores a copy of your bookings in the local session list below.
-        </p>
-      </div>
 
       {appointments.length === 0 ? (
         <div className="text-center py-20 bg-white border border-slate-100 rounded-[32px] text-slate-400">

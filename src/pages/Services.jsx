@@ -1,44 +1,39 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, BriefcaseMedical, Trash2, Edit3, Loader2, ExternalLink, HelpCircle, Tag } from 'lucide-react';
+import { Plus, BriefcaseMedical, Trash2, Edit3, Loader2, ExternalLink, Tag } from 'lucide-react';
 import Modal from '../components/Modal';
 import ConfirmModal from '../components/ConfirmModal';
-import { fetchServices } from '../api';
+import { fetchServices, fetchServiceDetail, createService, updateService, deleteService } from '../api';
 
 const Services = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
+  
   const [services, setServices] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   
   const [formData, setFormData] = useState({
     title: '',
     short_description: '',
-    keywordsText: '', // Comma-separated list for easy input
-    display_order: ''
+    full_content: '',
+    keyword_1: '',
+    keyword_2: '',
+    keyword_3: '',
+    display_order: '1'
   });
 
   const loadServicesData = async () => {
     try {
       setLoading(true);
       const apiServices = await fetchServices();
-      
-      const localServices = JSON.parse(localStorage.getItem('respira_services_local')) || [];
-      const deletedIds = JSON.parse(localStorage.getItem('respira_services_deleted')) || [];
-      const updatedServices = JSON.parse(localStorage.getItem('respira_services_updated')) || {};
-
-      const filteredApi = apiServices
-        .filter(s => !deletedIds.includes(s.id))
-        .map(s => updatedServices[s.id] ? { ...s, ...updatedServices[s.id] } : s);
-
-      setServices([...filteredApi, ...localServices]);
+      setServices(apiServices);
       setError(null);
     } catch (err) {
       console.error("Error loading services:", err);
-      setError("Failed to sync services from API. Showing offline cached records.");
-      setServices(JSON.parse(localStorage.getItem('respira_services_local')) || []);
+      setError("Failed to sync services from API. Please try again later.");
     } finally {
       setLoading(false);
     }
@@ -50,20 +45,43 @@ const Services = () => {
 
   const handleOpenAdd = () => {
     setEditingItem(null);
-    setFormData({ title: '', short_description: '', keywordsText: '', display_order: '1' });
+    setFormData({
+      title: '',
+      short_description: '',
+      full_content: '',
+      keyword_1: '',
+      keyword_2: '',
+      keyword_3: '',
+      display_order: '1'
+    });
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (service) => {
-    setEditingItem(service);
-    const keywordsStr = (service.keywords || []).join(', ');
-    setFormData({
-      title: service.title || '',
-      short_description: service.short_description || '',
-      keywordsText: keywordsStr,
-      display_order: service.display_order?.toString() || '1'
-    });
-    setIsModalOpen(true);
+  const handleOpenEdit = async (service) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Fetch full content and keywords from details view (by slug)
+      const detail = await fetchServiceDetail(service.slug);
+      
+      setEditingItem(detail);
+      setFormData({
+        title: detail.title || '',
+        short_description: detail.short_description || '',
+        full_content: detail.full_content || '',
+        keyword_1: detail.keywords?.[0] || '',
+        keyword_2: detail.keywords?.[1] || '',
+        keyword_3: detail.keywords?.[2] || '',
+        display_order: detail.display_order?.toString() || '1'
+      });
+      setIsModalOpen(true);
+    } catch (err) {
+      console.error("Failed to load service detail:", err);
+      setError("Failed to retrieve service details from live API.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleDeleteClick = (service) => {
@@ -71,74 +89,62 @@ const Services = () => {
     setIsConfirmOpen(true);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!itemToDelete) return;
-    const service = itemToDelete;
-    const isLocal = typeof service.id === 'string' || service.id > 1000000;
-    
-    if (isLocal) {
-      const localServices = JSON.parse(localStorage.getItem('respira_services_local')) || [];
-      const filtered = localServices.filter(s => s.id !== service.id);
-      localStorage.setItem('respira_services_local', JSON.stringify(filtered));
-    } else {
-      const deletedIds = JSON.parse(localStorage.getItem('respira_services_deleted')) || [];
-      if (!deletedIds.includes(service.id)) {
-        deletedIds.push(service.id);
-        localStorage.setItem('respira_services_deleted', JSON.stringify(deletedIds));
-      }
+    try {
+      setLoading(true);
+      await deleteService(itemToDelete.slug);
+      setServices(services.filter(s => s.id !== itemToDelete.id));
+      setItemToDelete(null);
+      setError(null);
+    } catch (err) {
+      console.error("Failed to delete service:", err);
+      setError("Failed to permanently delete service from the database.");
+    } finally {
+      setLoading(false);
     }
-    setServices(services.filter(s => s.id !== service.id));
-    setItemToDelete(null);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const parsedKeywords = formData.keywordsText
-      .split(',')
-      .map(k => k.trim())
-      .filter(k => k.length > 0);
-    const orderNum = parseInt(formData.display_order) || 1;
+    setSubmitting(true);
+    setError(null);
 
-    if (editingItem) {
-      const isLocal = typeof editingItem.id === 'string' || editingItem.id > 1000000;
-      const updatedItem = { 
-        ...editingItem, 
-        title: formData.title,
-        short_description: formData.short_description,
-        keywords: parsedKeywords,
-        display_order: orderNum
-      };
-      
-      if (isLocal) {
-        const localServices = JSON.parse(localStorage.getItem('respira_services_local')) || [];
-        const updated = localServices.map(s => s.id === editingItem.id ? updatedItem : s);
-        localStorage.setItem('respira_services_local', JSON.stringify(updated));
+    const payload = {
+      title: formData.title,
+      slug: formData.title.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''),
+      short_description: formData.short_description,
+      full_content: formData.full_content,
+      keyword_1: formData.keyword_1,
+      keyword_2: formData.keyword_2,
+      keyword_3: formData.keyword_3,
+      display_order: parseInt(formData.display_order) || 1,
+      is_active: true
+    };
+
+    try {
+      if (editingItem) {
+        // Use editingItem slug as it was fetched from the backend
+        await updateService(editingItem.slug, payload);
       } else {
-        const updatedServices = JSON.parse(localStorage.getItem('respira_services_updated')) || {};
-        updatedSpecs[editingItem.id] = {
-          title: formData.title,
-          short_description: formData.short_description,
-          keywords: parsedKeywords,
-          display_order: orderNum
-        };
-        localStorage.setItem('respira_services_updated', JSON.stringify(updatedServices));
+        await createService(payload);
       }
       
-      setServices(services.map(s => s.id === editingItem.id ? updatedItem : s));
-    } else {
-      const newService = {
-        id: Date.now(),
-        title: formData.title,
-        slug: formData.title.toLowerCase().replace(/\s+/g, '-'),
-        short_description: formData.short_description,
-        keywords: parsedKeywords,
-        display_order: orderNum
-      };
-      const localServices = JSON.parse(localStorage.getItem('respira_services_local')) || [];
-      localStorage.setItem('respira_services_local', JSON.stringify([newService, ...localServices]));
-      setServices([newService, ...services]);
+      const updatedServices = await fetchServices();
+      setServices(updatedServices);
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error("Failed to save service:", err);
+      let errMsg = "Failed to save changes to API database.";
+      if (err.details) {
+        errMsg = Object.entries(err.details)
+          .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(' ') : v}`)
+          .join('\n');
+      }
+      setError(errMsg);
+    } finally {
+      setSubmitting(false);
     }
-    setIsModalOpen(false);
   };
 
   return (
@@ -149,31 +155,18 @@ const Services = () => {
           <p className="text-slate-500 text-sm">Managing core hospital services and offerings</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-3">
-          <a 
-            href="https://api.husnoorinfotech.in/admin/" 
-            target="_blank" 
-            rel="noopener noreferrer" 
-            className="flex items-center justify-center gap-2 px-5 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl font-bold text-sm transition-all"
-          >
-            Django Admin <ExternalLink size={16} />
-          </a>
           <button 
             onClick={handleOpenAdd} 
-            className="flex items-center justify-center gap-2 px-6 py-3.5 bg-[var(--color-brand-dark)] text-white rounded-2xl font-bold shadow-lg active:scale-95 transition-all"
+            disabled={loading}
+            className="flex items-center justify-center gap-2 px-6 py-3.5 bg-[var(--color-brand-dark)] text-white rounded-2xl font-bold shadow-lg active:scale-95 transition-all disabled:opacity-50"
           >
             <Plus size={20} /> Add Service
           </button>
         </div>
       </div>
 
-      <div className="mb-6 bg-cyan-50/50 border border-cyan-100 p-4 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <p className="text-cyan-800 text-sm leading-relaxed">
-          <b>Admin Note:</b> Services are synced from the live API database. Local edits and deletions are cached in your browser. Live adjustments must be completed via the <b>Django Admin</b>.
-        </p>
-      </div>
-
       {error && (
-        <div className="mb-6 p-4 bg-amber-50 border border-amber-100 text-amber-800 rounded-2xl text-sm font-medium">
+        <div className="mb-6 p-4 bg-amber-50 border border-amber-100 text-amber-800 rounded-2xl text-sm font-medium whitespace-pre-wrap">
           {error}
         </div>
       )}
@@ -181,7 +174,7 @@ const Services = () => {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-20 text-slate-400 gap-3">
           <Loader2 size={40} className="animate-spin text-[var(--color-brand-dark)]" />
-          <span className="font-semibold text-sm">Loading services from API...</span>
+          <span className="font-semibold text-sm">Syncing services from database...</span>
         </div>
       ) : (
         <>
@@ -189,7 +182,7 @@ const Services = () => {
             <div className="text-center py-20 bg-white border border-slate-100 rounded-[32px] text-slate-400">
               <BriefcaseMedical size={48} className="mx-auto mb-4 opacity-50" />
               <p className="font-bold text-lg">No services found</p>
-              <p className="text-sm">Click "Add Service" to create a new service offering locally.</p>
+              <p className="text-sm">Click "Add Service" to create a new service offering.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -214,7 +207,7 @@ const Services = () => {
                     {service.keywords && service.keywords.length > 0 && (
                       <div className="mt-5">
                         <div className="flex flex-wrap gap-1.5">
-                          {service.keywords.map((kw, i) => (
+                          {service.keywords.filter(Boolean).map((kw, i) => (
                             <span key={i} className="text-[10px] bg-slate-50 border border-slate-100 text-slate-500 font-bold px-2 py-0.5 rounded-md flex items-center gap-1 uppercase tracking-wider">
                               <Tag size={8} /> {kw}
                             </span>
@@ -226,11 +219,7 @@ const Services = () => {
 
                   <div className="border-t border-slate-50 mt-6 pt-4 flex justify-between items-center text-xs text-slate-400">
                     <span>Order: <b>{service.display_order}</b></span>
-                    {typeof service.id === 'number' && service.id <= 1000 ? (
-                      <span className="font-bold text-emerald-600">Live API</span>
-                    ) : (
-                      <span className="font-bold text-cyan-600">Local Cache</span>
-                    )}
+                    <span className="font-bold text-emerald-600">Live Sync</span>
                   </div>
                 </div>
               ))}
@@ -243,24 +232,49 @@ const Services = () => {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="text-xs font-semibold text-slate-500 block mb-1">Service Title</label>
-            <input required className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-[var(--color-brand-primary)]" placeholder="e.g. Sports Rehabilitation" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} />
+            <input required className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-[var(--color-brand-primary)] text-sm" placeholder="e.g. Sports Rehabilitation" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} />
           </div>
           <div>
             <label className="text-xs font-semibold text-slate-500 block mb-1">Short Description</label>
-            <textarea required className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-[var(--color-brand-primary)] h-24 resize-none" placeholder="Explain the service details..." value={formData.short_description} onChange={(e) => setFormData({...formData, short_description: e.target.value})} />
+            <textarea required className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-[var(--color-brand-primary)] h-16 resize-none text-sm" placeholder="Explain the service details..." value={formData.short_description} onChange={(e) => setFormData({...formData, short_description: e.target.value})} />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-xs font-semibold text-slate-500 block mb-1">Full Detail Content</label>
+            <textarea required className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-[var(--color-brand-primary)] h-24 resize-none text-sm" placeholder="Write full details about the service treatment..." value={formData.full_content} onChange={(e) => setFormData({...formData, full_content: e.target.value})} />
+          </div>
+          
+          <div className="grid grid-cols-3 gap-2">
             <div>
-              <label className="text-xs font-semibold text-slate-500 block mb-1">Keywords (Comma Separated)</label>
-              <input required className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-[var(--color-brand-primary)]" placeholder="e.g. Sports, Recovery" value={formData.keywordsText} onChange={(e) => setFormData({...formData, keywordsText: e.target.value})} />
+              <label className="text-xs font-semibold text-slate-500 block mb-1">Keyword 1</label>
+              <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none text-xs" placeholder="e.g. Sports" value={formData.keyword_1} onChange={(e) => setFormData({...formData, keyword_1: e.target.value})} />
             </div>
             <div>
-              <label className="text-xs font-semibold text-slate-500 block mb-1">Display Order</label>
-              <input type="number" required className="w-full bg-slate-50 border border-slate-200 p-4 rounded-2xl outline-none focus:border-[var(--color-brand-primary)]" placeholder="e.g. 1" value={formData.display_order} onChange={(e) => setFormData({...formData, display_order: e.target.value})} />
+              <label className="text-xs font-semibold text-slate-500 block mb-1">Keyword 2</label>
+              <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none text-xs" placeholder="e.g. Recovery" value={formData.keyword_2} onChange={(e) => setFormData({...formData, keyword_2: e.target.value})} />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-slate-500 block mb-1">Keyword 3</label>
+              <input className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none text-xs" placeholder="e.g. Rehab" value={formData.keyword_3} onChange={(e) => setFormData({...formData, keyword_3: e.target.value})} />
             </div>
           </div>
-          <button type="submit" className="w-full py-4 bg-[var(--color-brand-dark)] text-white rounded-2xl font-bold shadow-lg hover:opacity-95 transition-opacity">
-            {editingItem ? "Save Changes" : "Create Service"}
+
+          <div>
+            <label className="text-xs font-semibold text-slate-500 block mb-1">Display Order</label>
+            <input type="number" required className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl outline-none text-sm" placeholder="e.g. 1" value={formData.display_order} onChange={(e) => setFormData({...formData, display_order: e.target.value})} />
+          </div>
+
+          <button 
+            type="submit" 
+            disabled={submitting}
+            className="w-full py-4 bg-[var(--color-brand-dark)] text-white rounded-2xl font-bold shadow-lg hover:opacity-95 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {submitting ? (
+              <>
+                <Loader2 size={18} className="animate-spin" /> Saving Live...
+              </>
+            ) : (
+              editingItem ? "Save Changes" : "Create Service"
+            )}
           </button>
         </form>
       </Modal>
@@ -270,7 +284,7 @@ const Services = () => {
         onClose={() => setIsConfirmOpen(false)} 
         onConfirm={handleConfirmDelete} 
         title="Delete Service" 
-        message={`Are you sure you want to remove the service: ${itemToDelete?.title}? This action cannot be undone.`} 
+        message={`Are you sure you want to permanently delete the service: ${itemToDelete?.title}? This action immediately updates the central database.`} 
       />
     </div>
   );
