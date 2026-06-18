@@ -1,14 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Calendar, Clock, MapPin, Phone, User, Loader2, Info } from 'lucide-react';
+import { Plus, Check, X, Calendar, Clock, MapPin, Phone, User, Loader2, Info } from 'lucide-react';
 import Modal from '../components/Modal';
-import ConfirmModal from '../components/ConfirmModal';
-import { fetchSpecialties, createAppointment } from '../api';
+import { fetchSpecialties, createAppointment, fetchAppointments, updateAppointmentStatus } from '../api';
 
 const Appointments = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
-  const [idToDelete, setIdToDelete] = useState(null);
-  const [appointments, setAppointments] = useState(() => JSON.parse(localStorage.getItem('respira_appts_list')) || []);
+  const [appointments, setAppointments] = useState([]);
+  const [loadingAppts, setLoadingAppts] = useState(true);
   const [specialties, setSpecialties] = useState([]);
   const [loadingSpecs, setLoadingSpecs] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -26,9 +24,21 @@ const Appointments = () => {
     time_slot: ''
   });
 
+  async function loadAppointmentsData() {
+    try {
+      setLoadingAppts(true);
+      const data = await fetchAppointments();
+      setAppointments(data);
+    } catch (err) {
+      console.error("Failed to load appointments:", err);
+    } finally {
+      setLoadingAppts(false);
+    }
+  }
+
   useEffect(() => {
-    localStorage.setItem('respira_appts_list', JSON.stringify(appointments));
-  }, [appointments]);
+    loadAppointmentsData();
+  }, []);
 
   useEffect(() => {
     async function loadSpecialties() {
@@ -61,15 +71,14 @@ const Appointments = () => {
     setIsModalOpen(true);
   };
 
-  const handleDeleteClick = (id) => {
-    setIdToDelete(id);
-    setIsConfirmOpen(true);
-  };
-
-  const handleConfirmDelete = () => {
-    if (idToDelete) {
-      setAppointments(appointments.filter(a => a.id !== idToDelete));
-      setIdToDelete(null);
+  const handleStatusChange = async (id, newStatus) => {
+    try {
+      await updateAppointmentStatus(id, newStatus);
+      const data = await fetchAppointments();
+      setAppointments(data);
+    } catch (err) {
+      console.error("Failed to update status:", err);
+      alert("Failed to update appointment status on the live database.");
     }
   };
 
@@ -97,24 +106,9 @@ const Appointments = () => {
       // POST to live API
       const result = await createAppointment(payload);
       
-      const conditionName = availableConditions.find(c => c.id === parseInt(formData.conditionId))?.name || 'General';
-      const specialtyName = selectedSpecialty?.name || 'General';
-
-      // Save locally so it appears in our dashboard lists
-      const localRecord = {
-        id: result.appointment_id || Date.now(),
-        full_name: formData.full_name,
-        phone: formData.phone,
-        address: `${formData.address}, ${formData.pincode}`,
-        specialty: specialtyName,
-        condition: conditionName,
-        date: formData.date,
-        time_slot: formData.time_slot,
-        status: result.status || 'pending',
-        is_api_synced: true
-      };
-
-      setAppointments([localRecord, ...appointments]);
+      // Fetch latest from API so we get the correct server list
+      const freshAppts = await fetchAppointments();
+      setAppointments(freshAppts);
       setApiSuccess(result.detail || "Appointment booked successfully on the live API!");
       
       // Reset form on success after a delay
@@ -154,7 +148,12 @@ const Appointments = () => {
       </div>
 
 
-      {appointments.length === 0 ? (
+      {loadingAppts ? (
+        <div className="flex flex-col items-center justify-center py-20 bg-white border border-slate-100 rounded-[32px] text-slate-400">
+          <Loader2 size={40} className="animate-spin text-[var(--color-brand-dark)] mb-4" />
+          <p className="font-semibold text-sm">Fetching live appointments...</p>
+        </div>
+      ) : appointments.length === 0 ? (
         <div className="text-center py-20 bg-white border border-slate-100 rounded-[32px] text-slate-400">
           <Calendar size={48} className="mx-auto mb-4 opacity-50" />
           <p className="font-bold text-lg">No appointments recorded</p>
@@ -186,8 +185,8 @@ const Appointments = () => {
                       </div>
                     </td>
                     <td className="px-6 py-5">
-                      <div className="text-sm font-semibold text-slate-800">{a.specialty}</div>
-                      <div className="text-xs text-slate-400">{a.condition}</div>
+                      <div className="text-sm font-semibold text-slate-800">{a.specialty_name || a.specialty}</div>
+                      <div className="text-xs text-slate-400">{a.condition_name || a.condition}</div>
                     </td>
                     <td className="px-6 py-5">
                       <div className="text-sm font-medium text-slate-600 flex items-center gap-1.5">
@@ -198,23 +197,45 @@ const Appointments = () => {
                       </div>
                     </td>
                     <td className="px-6 py-5 text-sm text-slate-500 max-w-[200px] truncate">
-                      <div className="flex items-center gap-1">
-                        <MapPin size={14} className="text-slate-400 shrink-0" /> {a.address}
+                      <div className="flex items-center gap-1" title={`${a.address}${a.pincode ? ', ' + a.pincode : ''}`}>
+                        <MapPin size={14} className="text-slate-400 shrink-0" /> {a.address}{a.pincode ? `, ${a.pincode}` : ''}
                       </div>
                     </td>
                     <td className="px-6 py-5 text-center">
-                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${a.status === 'pending' ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                      <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${a.status === 'pending' ? 'bg-amber-50 text-amber-600' : a.status === 'approved' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
                         {a.status}
                       </span>
                     </td>
                     <td className="px-8 py-5 text-right">
-                      <button 
-                        onClick={() => handleDeleteClick(a.id)} 
-                        className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
-                        title="Delete locally"
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        {a.status === 'pending' && (
+                          <>
+                            <button 
+                              onClick={() => handleStatusChange(a.id, 'approved')} 
+                              className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
+                              title="Approve Booking"
+                            >
+                              <Check size={18} />
+                            </button>
+                            <button 
+                              onClick={() => handleStatusChange(a.id, 'cancelled')} 
+                              className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                              title="Cancel Booking"
+                            >
+                              <X size={18} />
+                            </button>
+                          </>
+                        )}
+                        {a.status === 'approved' && (
+                          <button 
+                            onClick={() => handleStatusChange(a.id, 'cancelled')} 
+                            className="p-2 text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                            title="Cancel Booking"
+                          >
+                            <X size={18} />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -325,14 +346,6 @@ const Appointments = () => {
           </form>
         )}
       </Modal>
-
-      <ConfirmModal 
-        isOpen={isConfirmOpen} 
-        onClose={() => setIsConfirmOpen(false)} 
-        onConfirm={handleConfirmDelete} 
-        title="Delete Appointment Record" 
-        message="Are you sure you want to delete this appointment from your local session list?" 
-      />
     </div>
   );
 };

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import StatCard from '../components/StatCard';
 import { UserRound, Stethoscope, BriefcaseMedical, CalendarCheck, LayoutDashboard, Loader2 } from 'lucide-react';
-import { fetchDoctors, fetchSpecialties, fetchServices } from '../api';
+import { fetchDoctors, fetchSpecialties, fetchServices, fetchAppointments } from '../api';
 
 const Overview = () => {
   const [loading, setLoading] = useState(true);
@@ -17,20 +17,18 @@ const Overview = () => {
     async function loadStats() {
       try {
         setLoading(true);
-        const [doctors, specialties, services] = await Promise.all([
+        const [doctors, specialties, services, appointments] = await Promise.all([
           fetchDoctors(),
           fetchSpecialties(),
           fetchServices(),
+          fetchAppointments(),
         ]);
-        
-        // Load appointments from localStorage
-        const localAppts = JSON.parse(localStorage.getItem('respira_appts')) || [];
 
         setStats({
           doctorsCount: doctors.length,
           specialtiesCount: specialties.length,
           servicesCount: services.length,
-          appointmentsCount: localAppts.length,
+          appointmentsCount: appointments.length,
         });
         setError(null);
       } catch (err) {

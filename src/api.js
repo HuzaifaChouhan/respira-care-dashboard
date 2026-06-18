@@ -125,9 +125,21 @@ export async function deleteService(slug) {
 }
 
 // --- APPOINTMENTS ---
+export async function fetchAppointments() {
+  const data = await request(`${API_BASE_URL}/admin/appointments/`);
+  return data.results || [];
+}
+
 export async function createAppointment(appointmentData) {
   return await request(`${API_BASE_URL}/appointments/`, {
     method: 'POST',
     body: JSON.stringify(appointmentData),
+  });
+}
+
+export async function updateAppointmentStatus(id, status) {
+  return await request(`${API_BASE_URL}/admin/appointments/${id}/status/`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
   });
 }
