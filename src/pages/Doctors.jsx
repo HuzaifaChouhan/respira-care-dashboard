@@ -188,9 +188,11 @@ const Doctors = () => {
     if (photoPayload && (photoPayload.startsWith('http://') || photoPayload.startsWith('https://'))) {
       const match = photoPayload.match(/\.(png|jpg|jpeg|gif|webp|svg)/i);
       if (match) {
-        photoPayload = photoPayload + match[0];
+        if (!photoPayload.toLowerCase().endsWith(match[0].toLowerCase())) {
+          photoPayload = photoPayload + match[0];
+        }
       } else {
-        photoPayload = photoPayload + '.jpg.jpg';
+        photoPayload = photoPayload + '.jpg';
       }
     }
 
