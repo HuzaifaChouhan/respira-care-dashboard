@@ -4,6 +4,14 @@ import Modal from '../components/Modal';
 import ConfirmModal from '../components/ConfirmModal';
 import { fetchDoctors, fetchSpecialties, createDoctor, updateDoctor, deleteDoctor, uploadImage } from '../api';
 
+const sanitizePhotoUrl = (url) => {
+  if (!url) return '';
+  if (url.includes('files.catbox.moe') && !url.match(/\.(png|jpg|jpeg|gif|webp|svg)/i)) {
+    return `${url}.png`;
+  }
+  return url;
+};
+
 const DoctorImage = ({ src, alt }) => {
   const [error, setError] = useState(false);
   // Reset error state if src changes
@@ -20,7 +28,7 @@ const DoctorImage = ({ src, alt }) => {
   }
   return (
     <img 
-      src={src} 
+      src={sanitizePhotoUrl(src)} 
       alt={alt} 
       className="w-12 h-12 rounded-xl object-cover border border-slate-100"
       onError={() => setError(true)}
@@ -355,7 +363,7 @@ const Doctors = () => {
               <div className="relative w-16 h-16 rounded-2xl overflow-hidden bg-cyan-50 flex items-center justify-center border border-slate-100 shrink-0">
                 {formData.photo ? (
                   <img 
-                    src={formData.photo} 
+                    src={sanitizePhotoUrl(formData.photo)} 
                     alt="Preview" 
                     className="w-full h-full object-cover" 
                   />
