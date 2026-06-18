@@ -43,35 +43,7 @@ export default async function handler(req, res) {
       const buffer = Buffer.from(base64Content, 'base64');
       const ext = (mimeType.split('/')[1] || 'jpg').replace('jpeg', 'jpg');
 
-      // 1. Try Telegraph
-      try {
-        const boundary = `----VercelUploadBoundary${Math.random().toString(36).substring(2)}`;
-        const header = `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="image.${ext}"\r\nContent-Type: ${mimeType}\r\n\r\n`;
-        const footer = `\r\n--${boundary}--\r\n`;
-
-        const bodyBuffer = Buffer.concat([
-          Buffer.from(header, 'utf-8'),
-          buffer,
-          Buffer.from(footer, 'utf-8')
-        ]);
-
-        const response = await fetch('https://telegra.ph/upload', {
-          method: 'POST',
-          headers: {
-            'Content-Type': `multipart/form-data; boundary=${boundary}`
-          },
-          body: bodyBuffer
-        });
-
-        const data = await response.json();
-        if (Array.isArray(data) && data[0] && data[0].src) {
-          return res.status(200).json({ url: 'https://telegra.ph' + data[0].src });
-        }
-      } catch (err) {
-        console.error("Telegraph upload failed:", err);
-      }
-
-      // 2. Try Catbox as fallback
+      // Try Catbox for reliable permanent image uploads (bypassing Telegraph timeouts/blocks)
       try {
         const boundary = `----VercelUploadBoundary${Math.random().toString(36).substring(2)}`;
         const part1 = `--${boundary}\r\nContent-Disposition: form-data; name="reqtype"\r\n\r\nfileupload\r\n`;
@@ -97,11 +69,11 @@ export default async function handler(req, res) {
         if (url && url.startsWith('http')) {
           return res.status(200).json({ url });
         }
+        return res.status(500).json({ error: 'Catbox did not return a valid URL', message: url });
       } catch (err) {
         console.error("Catbox upload failed:", err);
+        return res.status(500).json({ error: 'Catbox upload failed', message: err.message });
       }
-
-      return res.status(500).json({ error: 'Image upload failed on all providers' });
     } catch (err) {
       console.error('Upload handler error:', err);
       return res.status(500).json({ error: 'Upload handler crashed', message: err.message });
