@@ -153,3 +153,18 @@ export async function updateAppointmentStatus(id, status) {
     body: JSON.stringify({ status }),
   });
 }
+
+export async function deleteAppointment(id) {
+  try {
+    return await request(`${API_BASE_URL}/admin/appointments/${id}/`, {
+      method: 'DELETE',
+    });
+  } catch (err) {
+    if (err.status === 405) {
+      console.warn("DELETE not supported on appointments, falling back to PATCH status cancelled");
+      return await updateAppointmentStatus(id, 'cancelled');
+    }
+    throw err;
+  }
+}
+

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Check, X, Calendar, Clock, MapPin, Phone, User, Loader2, Info, Trash2, Eye } from 'lucide-react';
 import Modal from '../components/Modal';
 import ConfirmModal from '../components/ConfirmModal';
-import { fetchSpecialties, createAppointment, fetchAppointments, updateAppointmentStatus } from '../api';
+import { fetchSpecialties, createAppointment, fetchAppointments, updateAppointmentStatus, deleteAppointment } from '../api';
 
 const Appointments = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -94,13 +94,17 @@ const Appointments = () => {
   const handleConfirmDelete = async () => {
     if (idToDelete) {
       try {
-        await updateAppointmentStatus(idToDelete, 'cancelled');
+        setLoadingAppts(true);
+        await deleteAppointment(idToDelete);
+        setAppointments(prev => prev.filter(appt => appt.id !== idToDelete));
       } catch (err) {
-        console.error("Failed to cancel booking on backend:", err);
+        console.error("Failed to delete booking on backend:", err);
+        alert("Failed to delete appointment from the live database.");
+      } finally {
+        setLoadingAppts(false);
+        setIdToDelete(null);
+        setIsConfirmOpen(false);
       }
-      setDeletedIds(prev => [...prev, idToDelete]);
-      setIdToDelete(null);
-      setIsConfirmOpen(false);
     }
   };
 
@@ -166,7 +170,7 @@ const Appointments = () => {
     }
   };
 
-  const displayedAppointments = appointments.filter(a => !deletedIds.includes(a.id));
+  const displayedAppointments = appointments;
 
   return (
     <div className="max-w-7xl mx-auto animate-in fade-in duration-500">
