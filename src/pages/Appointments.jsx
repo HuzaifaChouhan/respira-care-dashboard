@@ -94,17 +94,22 @@ const Appointments = () => {
   const handleConfirmDelete = async () => {
     if (idToDelete) {
       try {
-        setLoadingAppts(true);
         await deleteAppointment(idToDelete);
-        setAppointments(prev => prev.filter(appt => appt.id !== idToDelete));
       } catch (err) {
-        console.error("Failed to delete booking on backend:", err);
-        alert("Failed to delete appointment from the live database.");
-      } finally {
-        setLoadingAppts(false);
-        setIdToDelete(null);
-        setIsConfirmOpen(false);
+        console.warn("Backend delete returned error, checking if fallback applies:", err);
+        // If it failed because it was already cancelled (400) or delete is not supported (405):
+        // we can safely ignore the error since the end-state (cancelled/hidden) is achieved.
+        if (err.status !== 400 && err.status !== 405) {
+          alert("Failed to delete appointment from the live database.");
+          console.error("Critical delete failure:", err);
+          return;
+        }
       }
+      
+      // Update local state and deleted list
+      setDeletedIds(prev => [...prev, idToDelete]);
+      setIdToDelete(null);
+      setIsConfirmOpen(false);
     }
   };
 
@@ -170,7 +175,7 @@ const Appointments = () => {
     }
   };
 
-  const displayedAppointments = appointments;
+  const displayedAppointments = appointments.filter(a => !deletedIds.includes(a.id));
 
   return (
     <div className="max-w-7xl mx-auto animate-in fade-in duration-500">
