@@ -34,12 +34,12 @@ const DoctorImage = ({ src, alt, className }) => {
     }
   };
 
-  const defaultClass = "w-20 h-20 rounded-2xl object-cover border border-slate-100 shadow-sm";
+  const defaultClass = "w-30 h-40 rounded-xl object-cover border border-slate-100";
 
   if (!currentSrc || error) {
     return (
-      <div className={className || "w-20 h-20 rounded-2xl bg-cyan-50 flex items-center justify-center text-[var(--color-brand-dark)] border border-slate-100 shadow-sm"}>
-        <UserRound size={32} />
+      <div className={className || "w-12 h-12 rounded-xl bg-cyan-50 flex items-center justify-center text-[var(--color-brand-dark)]"}>
+        <UserRound size={24} />
       </div>
     );
   }
